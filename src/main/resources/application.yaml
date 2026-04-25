@@ -1,0 +1,10 @@
+spring:
+  application:
+    name: v1
+  profiles:
+    group:
+      local: [local, default-datasource, swagger, redis, security]
+      dev: [dev, dev-datasource, swagger, redis, security]
+    active: ${PROFILE_ACTIVE:local}
+
+

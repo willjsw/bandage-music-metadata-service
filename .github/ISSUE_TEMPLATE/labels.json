@@ -1,0 +1,42 @@
+[
+  {
+    "name": "✨ feature",
+    "description": "기능 추가",
+    "color": "0075ca"
+  },
+  {
+    "name": "⚙️ chore",
+    "description": "CI/CD 및 설정",
+    "color": "cfd3d7"
+  },
+  {
+    "name": "🛸 ai",
+    "description": "AI 자동화 작업",
+    "color": "8957e5"
+  },
+  {
+    "name": "♻️ refactor",
+    "description": "리팩토링",
+    "color": "0e8a16"
+  },
+  {
+    "name": "🐛 bug/error",
+    "description": "버그 및 에러",
+    "color": "d73a4a"
+  },
+  {
+    "name": "✅ test",
+    "description": "테스트 추가 및 수정",
+    "color": "2ea44f"
+  },
+  {
+    "name": "🪄 style",
+    "description": "코드 스타일 및 포맷",
+    "color": "c5def5"
+  },
+  {
+    "name": "🎨 design",
+    "description": "UI/디자인",
+    "color": "e99695"
+  }
+]
