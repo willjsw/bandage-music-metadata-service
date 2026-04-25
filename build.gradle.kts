@@ -58,10 +58,10 @@ dependencies {
     implementation("com.github.f4b6a3:uuid-creator:6.0.0")
 
     //Korutin
-    implementation("io.ktor:ktor-client-core:2.3.x")
-    implementation("io.ktor:ktor-client-cio:2.3.x") // 비동기 엔진
-    implementation("io.ktor:ktor-client-content-negotiation:2.3.x")
-    implementation("io.ktor:ktor-serialization-jackson:2.3.x") // JSON 파싱
+    implementation("io.ktor:ktor-client-core:2.3.11")
+    implementation("io.ktor:ktor-client-cio:2.3.11") // 비동기 엔진
+    implementation("io.ktor:ktor-client-content-negotiation:2.3.11")
+    implementation("io.ktor:ktor-serialization-jackson:2.3.11") // JSON 파싱
 }
 
 kotlin {
