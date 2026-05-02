@@ -1,0 +1,40 @@
+package com.bandage.musicmetadataservice.adapter.outbound.external.musicbrainz
+
+import com.bandage.musicmetadataservice.adapter.outbound.external.musicbrainz.dto.ArtistCreditDto
+import com.bandage.musicmetadataservice.adapter.outbound.external.musicbrainz.dto.MusicBrainzArtistDto
+import com.bandage.musicmetadataservice.adapter.outbound.external.musicbrainz.dto.MusicBrainzRecordingDto
+import com.bandage.musicmetadataservice.adapter.outbound.external.musicbrainz.dto.MusicBrainzReleaseDto
+import com.bandage.musicmetadataservice.domain.model.Artist
+import com.bandage.musicmetadataservice.domain.model.ArtistRef
+import com.bandage.musicmetadataservice.domain.model.Recording
+import com.bandage.musicmetadataservice.domain.model.Release
+
+internal fun MusicBrainzRecordingDto.toDomain(): Recording =
+    Recording(
+        id = id,
+        title = title,
+        lengthMs = length,
+        artists = artistCredit.toArtistRefs(),
+        isrcs = isrcs ?: emptyList(),
+    )
+
+internal fun MusicBrainzArtistDto.toDomain(): Artist =
+    Artist(
+        id = id,
+        name = name,
+        sortName = sortName,
+        country = country,
+        type = type,
+    )
+
+internal fun MusicBrainzReleaseDto.toDomain(): Release =
+    Release(
+        id = id,
+        title = title,
+        date = date,
+        country = country,
+        artistCredit = artistCredit.toArtistRefs(),
+    )
+
+private fun List<ArtistCreditDto>?.toArtistRefs(): List<ArtistRef> =
+    this?.map { ArtistRef(id = it.artist.id, name = it.artist.name) } ?: emptyList()
