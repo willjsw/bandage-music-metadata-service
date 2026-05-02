@@ -15,6 +15,8 @@ data class MusicBrainzArtistDto(
     @JsonProperty("sort-name") val sortName: String? = null,
     val country: String? = null,
     val type: String? = null,
+    /** search 응답에만 존재 (0..100). lookup 응답에는 없음 */
+    val score: Int? = null,
 )
 
 /**

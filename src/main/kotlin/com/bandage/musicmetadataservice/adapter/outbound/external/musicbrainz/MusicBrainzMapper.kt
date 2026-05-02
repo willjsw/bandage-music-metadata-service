@@ -4,10 +4,12 @@ import com.bandage.musicmetadataservice.adapter.outbound.external.musicbrainz.dt
 import com.bandage.musicmetadataservice.adapter.outbound.external.musicbrainz.dto.MusicBrainzArtistDto
 import com.bandage.musicmetadataservice.adapter.outbound.external.musicbrainz.dto.MusicBrainzRecordingDto
 import com.bandage.musicmetadataservice.adapter.outbound.external.musicbrainz.dto.MusicBrainzReleaseDto
+import com.bandage.musicmetadataservice.adapter.outbound.external.musicbrainz.dto.MusicBrainzReleaseGroupDto
 import com.bandage.musicmetadataservice.domain.model.Artist
 import com.bandage.musicmetadataservice.domain.model.ArtistRef
 import com.bandage.musicmetadataservice.domain.model.Recording
 import com.bandage.musicmetadataservice.domain.model.Release
+import com.bandage.musicmetadataservice.domain.model.ReleaseGroup
 
 internal fun MusicBrainzRecordingDto.toDomain(): Recording =
     Recording(
@@ -16,6 +18,8 @@ internal fun MusicBrainzRecordingDto.toDomain(): Recording =
         lengthMs = length,
         artists = artistCredit.toArtistRefs(),
         isrcs = isrcs ?: emptyList(),
+        releaseCount = releases?.size ?: 0,
+        score = score,
     )
 
 internal fun MusicBrainzArtistDto.toDomain(): Artist =
@@ -25,6 +29,19 @@ internal fun MusicBrainzArtistDto.toDomain(): Artist =
         sortName = sortName,
         country = country,
         type = type,
+        score = score,
+    )
+
+internal fun MusicBrainzReleaseGroupDto.toDomain(): ReleaseGroup =
+    ReleaseGroup(
+        id = id,
+        title = title,
+        primaryType = primaryType,
+        secondaryTypes = secondaryTypes ?: emptyList(),
+        firstReleaseDate = firstReleaseDate,
+        artistCredit = artistCredit.toArtistRefs(),
+        releaseCount = releases?.size ?: 0,
+        score = score,
     )
 
 internal fun MusicBrainzReleaseDto.toDomain(): Release =

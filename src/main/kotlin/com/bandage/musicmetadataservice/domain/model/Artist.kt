@@ -14,6 +14,8 @@ data class Artist(
     val sortName: String? = null,
     val country: String? = null,
     val type: String? = null,
+    /** MusicBrainz search 응답의 score (0..100). lookup 결과에는 항상 null. */
+    val score: Int? = null,
 )
 
 /**

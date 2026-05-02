@@ -27,3 +27,14 @@ data class MusicBrainzArtistSearchResponse(
     val offset: Int = 0,
     val artists: List<MusicBrainzArtistDto> = emptyList(),
 )
+
+/**
+ * `GET /ws/2/release-group/?query=...&fmt=json` 검색 응답.
+ */
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class MusicBrainzReleaseGroupSearchResponse(
+    val created: String? = null,
+    val count: Int = 0,
+    val offset: Int = 0,
+    @com.fasterxml.jackson.annotation.JsonProperty("release-groups") val releaseGroups: List<MusicBrainzReleaseGroupDto> = emptyList(),
+)

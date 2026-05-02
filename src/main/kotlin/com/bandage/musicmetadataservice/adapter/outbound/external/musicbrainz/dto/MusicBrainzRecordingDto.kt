@@ -21,4 +21,6 @@ data class MusicBrainzRecordingDto(
     val isrcs: List<String>? = null,
     @JsonProperty("artist-credit") val artistCredit: List<ArtistCreditDto>? = null,
     val releases: List<MusicBrainzReleaseDto>? = null,
+    /** search 응답에만 존재 (0..100). lookup 응답에는 없음 */
+    val score: Int? = null,
 )

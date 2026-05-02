@@ -17,4 +17,14 @@ data class Recording(
     val lengthMs: Long? = null,
     val artists: List<ArtistRef> = emptyList(),
     val isrcs: List<String> = emptyList(),
+    /**
+     * 같은 녹음이 수록된 release(발매본) 수.
+     * 검색 응답의 releases 배열 길이를 그대로 사용 — MB 가 인덱싱한 시점 기준의 근사치이며
+     * 실제 인기도와 일치하지는 않는다 (리마스터/베스트앨범 재수록이 많을 수 있음).
+     */
+    val releaseCount: Int = 0,
+    /**
+     * MusicBrainz search 응답의 score (0..100). lookup 결과에는 항상 null.
+     */
+    val score: Int? = null,
 )
