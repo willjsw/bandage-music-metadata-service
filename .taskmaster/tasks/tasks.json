@@ -1,0 +1,151 @@
+{
+  "master": {
+    "tasks": [
+      {
+        "id": "1",
+        "title": "MusicBrainzApiProperties 설정 클래스 및 YAML 추가",
+        "description": "MusicBrainz API 호출에 필요한 설정값(baseUrl, userAgent, contact)을 관리하는 Properties 클래스를 생성하고, application.yaml 프로필 설정에 musicbrainz 관련 항목을 추가한다.",
+        "details": "1. `global/properties/MusicBrainzApiProperties.kt` 생성:\n```kotlin\n@ConfigurationProperties(prefix = \"musicbrainz\")\ndata class MusicBrainzApiProperties(\n    val baseUrl: String = \"https://musicbrainz.org\",\n    val userAgent: String,\n    val contact: String,\n)\n```\n\n2. `PropertiesConfig.kt`에 `MusicBrainzApiProperties::class` 추가\n\n3. `src/main/resources/application-musicbrainz.yaml` 생성:\n```yaml\nmusicbrainz:\n  base-url: ${MUSICBRAINZ_BASE_URL:https://musicbrainz.org}\n  user-agent: BandageMusicMetadata/0.1.0\n  contact: ${MUSICBRAINZ_CONTACT:contact@bandage.com}\n```\n\n4. `application.yaml`의 profile group에 musicbrainz 추가:\n- local: [local, default-datasource, swagger, redis, security, musicbrainz]\n- dev: [dev, dev-datasource, swagger, redis, security, musicbrainz]\n\n5. `.env.example`에 `MUSICBRAINZ_CONTACT` 항목 추가 (인증 불필요하므로 API key 없음)",
+        "testStrategy": "1. `./gradlew bootRun` 실행 후 애플리케이션 정상 기동 확인\n2. Properties 바인딩 검증: ApplicationContext에서 MusicBrainzApiProperties 빈 주입 확인\n3. 환경변수 미설정 시 기본값 적용 확인",
+        "priority": "high",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [],
+        "updatedAt": "2026-05-02T13:17:50.081Z"
+      },
+      {
+        "id": "2",
+        "title": "MusicBrainzHttpClientConfig Ktor HttpClient 빈 구성",
+        "description": "MusicBrainz API 호출용 Ktor CIO HttpClient 빈을 생성한다. User-Agent 헤더가 기본으로 포함되어야 하며, rate limit(1 req/sec) 준수를 위한 throttle 메커니즘을 내장한다.",
+        "details": "1. `global/config/musicbrainz/MusicBrainzHttpClientConfig.kt` 생성:\n```kotlin\n@Configuration\n@EnableConfigurationProperties(MusicBrainzApiProperties::class)\nclass MusicBrainzHttpClientConfig(\n    private val properties: MusicBrainzApiProperties,\n) {\n    @Bean\n    fun musicBrainzHttpClient(): HttpClient =\n        HttpClient(CIO) {\n            expectSuccess = false\n            install(ContentNegotiation) {\n                jackson {\n                    registerModule(KotlinModule.Builder().build())\n                    configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)\n                }\n            }\n            install(DefaultRequest) {\n                header(HttpHeaders.UserAgent, \"${properties.userAgent} ( ${properties.contact} )\")\n                header(HttpHeaders.Accept, \"application/json\")\n            }\n        }\n}\n```\n\n2. User-Agent 형식: `AppName/Version ( contact-email )` — MusicBrainz 정책 준수\n3. Jackson 설정: unknown properties 무시, Kotlin 모듈 등록\n4. expectSuccess=false: 4xx/5xx도 예외 없이 받아서 호출부에서 처리",
+        "testStrategy": "1. ApplicationContext 로드 시 musicBrainzHttpClient 빈 정상 생성 확인\n2. 빈 주입 후 User-Agent 헤더 포함 여부 디버그 로그 확인\n3. Properties 누락 시 기동 실패 확인 (필수 필드 검증)",
+        "priority": "high",
+        "dependencies": [
+          "1"
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": "3",
+        "title": "MusicBrainzApiException 예외 클래스 생성",
+        "description": "MusicBrainz API 호출 실패(4xx/5xx) 시 던지는 어댑터 레벨 예외 클래스를 생성한다. 503/429 응답 시 Retry-After 헤더 값을 포함한다.",
+        "details": "`adapter/outbound/external/musicbrainz/MusicBrainzApiException.kt` 생성:\n```kotlin\npackage com.bandage.musicmetadataservice.adapter.outbound.external.musicbrainz\n\n/**\n * MusicBrainz API 호출이 2xx가 아닐 때 던지는 어댑터 레벨 예외.\n *\n * - statusCode: HTTP status (400, 404, 429, 503 등)\n * - retryAfterSeconds: 429/503 응답 시 Retry-After 헤더 값(초)\n * - rawBody: 응답 본문 그대로 (디버깅용)\n */\nclass MusicBrainzApiException(\n    val statusCode: Int,\n    val rawBody: String,\n    val retryAfterSeconds: Long? = null,\n) : RuntimeException(\"MusicBrainz API error [$statusCode]: $rawBody\")\n```\n\nSpotifyApiException 구조와 동일하게 유지하여 일관성 확보",
+        "testStrategy": "1. 예외 생성 후 message, statusCode, retryAfterSeconds 필드 정상 접근 확인\n2. GlobalExceptionHandler에서 해당 예외 처리 로직 추가 여부 검토 (MVP 범위 밖이면 후속)",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": "4",
+        "title": "MusicBrainz 응답 DTO 클래스 생성",
+        "description": "MusicBrainz Web Service v2 API의 recording/artist 검색 및 lookup 응답을 매핑하는 DTO 클래스들을 생성한다.",
+        "details": "`adapter/outbound/external/musicbrainz/dto/` 디렉토리 구조:\n\n1. `MusicBrainzSearchResponse.kt` (공통 검색 응답 wrapper):\n```kotlin\ndata class MusicBrainzRecordingSearchResponse(\n    val created: String?,\n    val count: Int,\n    val offset: Int,\n    val recordings: List<MusicBrainzRecordingDto>,\n)\n\ndata class MusicBrainzArtistSearchResponse(\n    val created: String?,\n    val count: Int,\n    val offset: Int,\n    val artists: List<MusicBrainzArtistDto>,\n)\n```\n\n2. `MusicBrainzRecordingDto.kt`:\n```kotlin\ndata class MusicBrainzRecordingDto(\n    val id: String,  // MBID\n    val title: String,\n    val length: Long?,  // milliseconds\n    val isrcs: List<String>?,\n    @JsonProperty(\"artist-credit\")\n    val artistCredit: List<ArtistCreditDto>?,\n    val releases: List<MusicBrainzReleaseDto>?,\n)\n\ndata class ArtistCreditDto(\n    val name: String?,\n    val artist: ArtistRefDto,\n)\n\ndata class ArtistRefDto(\n    val id: String,\n    val name: String,\n    @JsonProperty(\"sort-name\")\n    val sortName: String?,\n)\n```\n\n3. `MusicBrainzArtistDto.kt`:\n```kotlin\ndata class MusicBrainzArtistDto(\n    val id: String,\n    val name: String,\n    @JsonProperty(\"sort-name\")\n    val sortName: String?,\n    val country: String?,\n    val type: String?,\n)\n```\n\n4. `MusicBrainzReleaseDto.kt`:\n```kotlin\ndata class MusicBrainzReleaseDto(\n    val id: String,\n    val title: String,\n    val date: String?,\n    val country: String?,\n)\n```",
+        "testStrategy": "1. MusicBrainz API 실제 응답 JSON 샘플로 Jackson 역직렬화 테스트\n2. 필드 누락 시 null 처리 확인 (FAIL_ON_UNKNOWN_PROPERTIES=false)\n3. kebab-case 필드명 @JsonProperty 매핑 검증",
+        "priority": "high",
+        "dependencies": [],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": "5",
+        "title": "도메인 모델 Recording, Artist, Release, ArtistRef 생성",
+        "description": "외부 API DTO에 의존하지 않는 도메인 중심 모델을 정의한다. MusicBrainz/Spotify 양쪽에서 공통으로 매핑 가능한 최소 필드만 포함한다.",
+        "details": "`domain/model/` 디렉토리에 파일 생성:\n\n1. `ArtistRef.kt`:\n```kotlin\npackage com.bandage.musicmetadataservice.domain.model\n\n/**\n * 아티스트 참조 (ID + 이름만 포함하는 경량 모델).\n * Recording, Release 등에서 아티스트 크레딧용으로 사용.\n */\ndata class ArtistRef(\n    val id: String,\n    val name: String,\n)\n```\n\n2. `Recording.kt`:\n```kotlin\ndata class Recording(\n    val id: String,\n    val title: String,\n    val lengthMs: Long?,\n    val artists: List<ArtistRef>,\n    val isrcs: List<String>,\n)\n```\n\n3. `Artist.kt`:\n```kotlin\ndata class Artist(\n    val id: String,\n    val name: String,\n    val sortName: String?,\n    val country: String?,\n    val type: String?,\n)\n```\n\n4. `Release.kt`:\n```kotlin\ndata class Release(\n    val id: String,\n    val title: String,\n    val date: String?,\n    val country: String?,\n    val artistCredit: List<ArtistRef>,\n)\n```\n\n도메인 모델은 순수 Kotlin data class — JPA/Spring 어노테이션 없음",
+        "testStrategy": "1. data class 기본 기능 검증 (equals, hashCode, copy)\n2. DTO → 도메인 모델 매핑 로직 작성 후 변환 정합성 확인",
+        "priority": "high",
+        "dependencies": [],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": "6",
+        "title": "MusicInfoApiClient 포트 인터페이스 확장",
+        "description": "기존 placeholder 시그니처(getToken, getMusicInfo)를 도메인 중심 메서드(searchRecording, lookupRecording, searchArtist, lookupArtist)로 확장한다.",
+        "details": "`application/port/outbound/MusicInfoApiClient.kt` 수정:\n```kotlin\npackage com.bandage.musicmetadataservice.application.port.outbound\n\nimport com.bandage.musicmetadataservice.domain.model.Artist\nimport com.bandage.musicmetadataservice.domain.model.Recording\n\n/**\n * 외부 음악 메타데이터 API 호출 포트.\n * 구현체: MusicBrainzApiClient (기본), SpotifyApiClient (비활성)\n */\ninterface MusicInfoApiClient {\n    // ===== 레거시 (Spotify 호환용, deprecated) =====\n    @Deprecated(\"Use searchRecording/searchArtist instead\")\n    fun getToken(): String = throw UnsupportedOperationException(\"Not supported\")\n\n    @Deprecated(\"Use searchRecording/searchArtist instead\")\n    fun getMusicInfo(): String = throw UnsupportedOperationException(\"Not supported\")\n\n    // ===== Recording =====\n    fun searchRecording(query: String, limit: Int = 25, offset: Int = 0): List<Recording>\n    fun lookupRecording(id: String): Recording?\n\n    // ===== Artist =====\n    fun searchArtist(query: String, limit: Int = 25, offset: Int = 0): List<Artist>\n    fun lookupArtist(id: String): Artist?\n}\n```\n\n기존 getToken/getMusicInfo는 default 구현으로 UnsupportedOperationException throw — Spotify 어댑터 하위 호환 유지",
+        "testStrategy": "1. 컴파일 성공 확인\n2. 기존 SpotifyApiClient가 새 메서드 미구현 시 컴파일 에러 발생 → 별도 처리 필요",
+        "priority": "high",
+        "dependencies": [
+          "5"
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": "7",
+        "title": "MusicBrainzApiClient 어댑터 구현",
+        "description": "MusicInfoApiClient 포트를 구현하는 MusicBrainz 어댑터를 생성한다. recording/artist 검색 및 lookup API 호출, DTO→도메인 매핑, rate limit throttle(1 req/sec)을 포함한다.",
+        "details": "`adapter/outbound/external/musicbrainz/MusicBrainzApiClient.kt`:\n```kotlin\n@Component\n@Primary\nclass MusicBrainzApiClient(\n    private val musicBrainzHttpClient: HttpClient,\n    private val properties: MusicBrainzApiProperties,\n) : MusicInfoApiClient {\n\n    private val mutex = Mutex()\n    private var lastCallTime: Instant = Instant.EPOCH\n\n    override fun searchRecording(query: String, limit: Int, offset: Int): List<Recording> =\n        runBlocking {\n            throttle()\n            val response = musicBrainzHttpClient.get(\"${properties.baseUrl}/ws/2/recording/\") {\n                parameter(\"query\", query)\n                parameter(\"limit\", limit)\n                parameter(\"offset\", offset)\n                parameter(\"fmt\", \"json\")\n            }\n            ensureSuccess(response)\n            val dto: MusicBrainzRecordingSearchResponse = response.body()\n            dto.recordings.map { it.toDomain() }\n        }\n\n    override fun lookupRecording(id: String): Recording? =\n        runBlocking {\n            throttle()\n            val response = musicBrainzHttpClient.get(\"${properties.baseUrl}/ws/2/recording/$id\") {\n                parameter(\"inc\", \"artists+isrcs+releases\")\n                parameter(\"fmt\", \"json\")\n            }\n            if (response.status.value == 404) return@runBlocking null\n            ensureSuccess(response)\n            val dto: MusicBrainzRecordingDto = response.body()\n            dto.toDomain()\n        }\n\n    // searchArtist, lookupArtist 동일 패턴\n\n    private suspend fun throttle() {\n        mutex.withLock {\n            val elapsed = Duration.between(lastCallTime, Instant.now())\n            if (elapsed < Duration.ofSeconds(1)) {\n                delay(Duration.ofSeconds(1).minus(elapsed).toMillis())\n            }\n            lastCallTime = Instant.now()\n        }\n    }\n\n    private suspend fun ensureSuccess(response: HttpResponse) {\n        if (response.status.isSuccess()) return\n        val retryAfter = response.headers[HttpHeaders.RetryAfter]?.toLongOrNull()\n        throw MusicBrainzApiException(\n            statusCode = response.status.value,\n            rawBody = response.bodyAsText(),\n            retryAfterSeconds = retryAfter,\n        )\n    }\n}\n```\n\nDTO→도메인 매핑 확장 함수:\n```kotlin\nfun MusicBrainzRecordingDto.toDomain(): Recording = Recording(\n    id = id,\n    title = title,\n    lengthMs = length,\n    artists = artistCredit?.map { ArtistRef(it.artist.id, it.artist.name) } ?: emptyList(),\n    isrcs = isrcs ?: emptyList(),\n)\n```",
+        "testStrategy": "1. 실제 MusicBrainz API 호출 curl로 응답 확인 후 매핑 검증\n2. throttle 동작 확인: 연속 호출 시 1초 간격 유지 로그 확인\n3. 404 응답 시 null 반환, 503/429 시 예외 던짐 확인",
+        "priority": "high",
+        "dependencies": [
+          "2",
+          "3",
+          "4",
+          "5",
+          "6"
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": "8",
+        "title": "Spotify 어댑터 비활성화 처리",
+        "description": "SpotifyApiClient, SpotifyHttpClientConfig, SpotifyApiProperties를 조건부 비활성화 처리한다. 기본값은 musicbrainz이며, external.music.provider=spotify 설정 시에만 활성화된다.",
+        "details": "1. `SpotifyApiClient.kt` 수정:\n```kotlin\n@Component\n@ConditionalOnProperty(\n    name = [\"external.music.provider\"],\n    havingValue = \"spotify\",\n    matchIfMissing = false,\n)\nclass SpotifyApiClient(...) : MusicInfoApiClient { ... }\n```\n\n2. `SpotifyHttpClientConfig.kt` 수정:\n```kotlin\n@Configuration\n@ConditionalOnProperty(\n    name = [\"external.music.provider\"],\n    havingValue = \"spotify\",\n    matchIfMissing = false,\n)\nclass SpotifyHttpClientConfig { ... }\n```\n\n3. `application.yaml`에 기본값 추가:\n```yaml\nexternal:\n  music:\n    provider: musicbrainz\n```\n\n4. SpotifyApiClient에 새 인터페이스 메서드 구현 추가 (컴파일 에러 방지):\n```kotlin\noverride fun searchRecording(...) = throw UnsupportedOperationException(\"Use Spotify search() instead\")\noverride fun lookupRecording(...) = throw UnsupportedOperationException(\"Not implemented\")\noverride fun searchArtist(...) = throw UnsupportedOperationException(\"Not implemented\")\noverride fun lookupArtist(...) = throw UnsupportedOperationException(\"Not implemented\")\n```\n\n5. profile group에서 spotify 제거 (optional — musicbrainz로 대체됨)",
+        "testStrategy": "1. 기본 설정으로 bootRun 시 SpotifyApiClient 빈 미등록 확인\n2. external.music.provider=spotify 설정 시 Spotify 빈 등록 확인\n3. MusicBrainzApiClient에 @Primary 어노테이션으로 기본 주입 확인",
+        "priority": "high",
+        "dependencies": [
+          "7"
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": "9",
+        "title": "MusicBrainzTestController 생성 및 SpotifyTestController 비활성화",
+        "description": "local 프로필에서 MusicBrainz API 검증용 테스트 컨트롤러를 생성하고, 기존 SpotifyTestController를 비활성화한다.",
+        "details": "1. `adapter/inbound/web/controller/MusicBrainzTestController.kt` 생성:\n```kotlin\n@RestController\n@RequestMapping(\"/dev/musicbrainz\")\n@Profile(\"local\")\nclass MusicBrainzTestController(\n    private val musicInfoApiClient: MusicInfoApiClient,\n) {\n    @GetMapping(\"/recording/search\")\n    fun searchRecording(\n        @RequestParam query: String,\n        @RequestParam(defaultValue = \"25\") limit: Int,\n        @RequestParam(defaultValue = \"0\") offset: Int,\n    ): List<Recording> = musicInfoApiClient.searchRecording(query, limit, offset)\n\n    @GetMapping(\"/recording/{mbid}\")\n    fun lookupRecording(@PathVariable mbid: String): Recording? =\n        musicInfoApiClient.lookupRecording(mbid)\n\n    @GetMapping(\"/artist/search\")\n    fun searchArtist(\n        @RequestParam query: String,\n        @RequestParam(defaultValue = \"25\") limit: Int,\n        @RequestParam(defaultValue = \"0\") offset: Int,\n    ): List<Artist> = musicInfoApiClient.searchArtist(query, limit, offset)\n\n    @GetMapping(\"/artist/{mbid}\")\n    fun lookupArtist(@PathVariable mbid: String): Artist? =\n        musicInfoApiClient.lookupArtist(mbid)\n}\n```\n\n2. `SpotifyTestController.kt` 비활성화:\n```kotlin\n@Profile(\"spotify-test\")  // local → spotify-test로 변경하여 기본 비활성화\n```\n\n또는 @ConditionalOnProperty(\"external.music.provider\", havingValue = \"spotify\") 추가",
+        "testStrategy": "1. curl 테스트:\n   - `curl \"http://localhost:18081/dev/musicbrainz/recording/search?query=Doxy%20AND%20artist:Miles%20Davis&limit=5\"`\n   - `curl \"http://localhost:18081/dev/musicbrainz/recording/{mbid}\"`\n   - `curl \"http://localhost:18081/dev/musicbrainz/artist/search?query=Miles%20Davis\"`\n2. 기존 /dev/spotify/** 엔드포인트 404 응답 확인",
+        "priority": "medium",
+        "dependencies": [
+          "7",
+          "8"
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": "10",
+        "title": "빌드/포맷 통과 및 로컬 실서버 검증",
+        "description": "./gradlew spotlessApply build 통과를 확인하고, 로컬에서 MusicBrainz API 전수 호출 검증을 수행한 뒤 .taskmaster/report/ 디렉토리에 검증 리포트를 작성한다.",
+        "details": "1. 코드 포맷팅 및 빌드:\n```bash\n./gradlew spotlessApply\n./gradlew build\n```\n\n2. 로컬 서버 기동:\n```bash\n./gradlew bootRun\n```\n\n3. curl 전수 검증 케이스:\n```bash\n# Recording 검색 - 성공\ncurl \"http://localhost:18081/dev/musicbrainz/recording/search?query=Doxy&limit=5\"\n\n# Recording lookup - 존재하는 MBID\ncurl \"http://localhost:18081/dev/musicbrainz/recording/{valid-mbid}\"\n\n# Recording lookup - 존재하지 않는 MBID (404 → null)\ncurl \"http://localhost:18081/dev/musicbrainz/recording/00000000-0000-0000-0000-000000000000\"\n\n# Artist 검색\ncurl \"http://localhost:18081/dev/musicbrainz/artist/search?query=Miles%20Davis\"\n\n# Artist lookup\ncurl \"http://localhost:18081/dev/musicbrainz/artist/{valid-mbid}\"\n\n# 빈 쿼리 / 잘못된 파라미터 케이스\n```\n\n4. `.taskmaster/report/musicbrainz-api-verification-YYYY-MM-DD.md` 작성:\n- 메타: 작성일, 검증 도구, 범위\n- 테스트 API 목록 (path/method/판정)\n- 케이스별 요청/응답 원문\n- 발견 이슈 및 권장 조치",
+        "testStrategy": "1. ./gradlew build 성공 (exit code 0)\n2. ./gradlew spotlessCheck 성공 (포맷 검증)\n3. 모든 curl 케이스 예상 응답 확인\n4. 검증 리포트 파일 존재 및 내용 충실성 확인",
+        "priority": "high",
+        "dependencies": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9"
+        ],
+        "status": "pending",
+        "subtasks": []
+      }
+    ],
+    "metadata": {
+      "version": "1.0.0",
+      "lastModified": "2026-05-02T13:17:50.085Z",
+      "taskCount": 10,
+      "completedCount": 1,
+      "tags": [
+        "master"
+      ]
+    }
+  }
+}
