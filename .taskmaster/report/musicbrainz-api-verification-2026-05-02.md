@@ -6,139 +6,155 @@
 - 작성자: Claude (BD-8 작업)
 - 대상: `music-metadata-service` 의 MusicBrainz 어댑터 (Spotify → MusicBrainz 전환)
 - 검증 도구: `curl` (HTTP 1.1, port 18081)
-- 범위: `/dev/musicbrainz/*` 4개 엔드포인트 + 어댑터 동작 (rate limit, 404, User-Agent)
-- 상태: **실서버 검증 대기 중** (로컬 PostgreSQL 미기동으로 `./gradlew bootRun` 부팅 실패)
+- 범위: `/dev/musicbrainz/*` 4개 엔드포인트 + 어댑터 동작 (rate limit, 404, User-Agent, Spotify 비활성)
+- 상태: **검증 완료** — P2 이슈 1건 발견
 
-## 자동화된 검증 (완료)
+## 자동화된 검증
 
 - `./gradlew spotlessApply` — 통과
 - `./gradlew compileKotlin` — 통과
 - `./gradlew test` (`MusicMetadataServiceApplicationTests.contextLoads`) — 통과
-  - 테스트 프로필에 `spotify` / `musicbrainz` / `external.music.provider=musicbrainz` 더미 설정 추가
 - `./gradlew build` — 통과
 
-## 실서버 검증 — 대기 중인 이유
+## 환경
 
-`./gradlew bootRun` 실행 시 다음 오류로 부팅 실패:
+- 앱: PROFILE_ACTIVE=local, port 18081, 2.5s 부팅
+- DB: localhost:5432 PostgreSQL `bandage` (developer/1234)
+- 외부: `https://musicbrainz.org` 직접 호출
+- `external.music.provider=musicbrainz` (Spotify 어댑터 빈 비활성)
+
+## 케이스별 결과
+
+### 1. recording 검색 (Lucene query)
 
 ```
-HibernateException: Unable to determine Dialect without JDBC metadata
-(please set 'jakarta.persistence.jdbc.url' for common cases ...)
+GET /dev/musicbrainz/recording/search?query=Doxy AND artist:Miles Davis&limit=2
 ```
 
-원인: `local` 프로필은 외부 PostgreSQL 을 요구하며 (`ddl-auto: validate`), 다음 환경변수가 필요함:
-- `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD`
+- HTTP 200, 2.91s
+- 응답 (요약):
+  ```json
+  [
+    {
+      "id":"fb5c9d91-6d40-4a3c-af72-f6166a516d83",
+      "title":"Doxy",
+      "lengthMs":293000,
+      "artists":[
+        {"id":"561d854a-...","name":"Miles Davis"},
+        {"id":"d185d986-...","name":"Horace Silver"},
+        ...
+      ],
+      "isrcs":["FR8X00900735","USUG11401903","DEU241093369","DEU240820044","DEA319804492"]
+    },
+    {"id":"214d3494-...","title":"Doxy (remastered 2009)", ...}
+  ]
+  ```
+- 판정: 정상 — DTO→도메인 매핑 (length ms / artist-credit / isrcs) 모두 정확
 
-현재 로컬 셸에 DB 환경변수 미설정 + Postgres 미기동 → 부팅 불가.
+### 2. recording MBID lookup (성공)
 
-## 검증해야 할 항목 (DB 기동 후 수행)
+```
+GET /dev/musicbrainz/recording/fb5c9d91-6d40-4a3c-af72-f6166a516d83
+```
 
-### 사전 조건
+- HTTP 200, 1.78s
+- 응답: `{ id, title:"Doxy", lengthMs:293000, artists:[5명], isrcs:[5개] }`
+- 판정: 정상 — `inc=artists+isrcs+releases` 효과로 isrcs / artists 포함
+
+### 3a. lookup invalid MBID 형식 (전부 0)
+
+```
+GET /dev/musicbrainz/recording/00000000-0000-0000-0000-000000000000
+```
+
+- HTTP **500** (예상: 400 또는 4xx)
+- 백엔드 로그: `MusicBrainzApiException: MusicBrainz API error [400]: {"error":"Invalid mbid."}`
+- 원인: MusicBrainz 가 invalid mbid 에 400 응답 → 어댑터에서 `MusicBrainzApiException` throw → 글로벌 예외 핸들러가 500 으로 변환
+- 판정: **P2 (품질)** — invalid 사용자 입력에 대해 5xx 가 아닌 4xx 응답으로 mapping 권장 (별도 후속 작업)
+
+### 3b. lookup valid-format nonexistent UUID → null
+
+```
+GET /dev/musicbrainz/recording/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
+```
+
+- HTTP 200, body empty (Spring null 직렬화)
+- 판정: 정상 — 어댑터의 `if (response.status.value == 404) return null` 동작 확인
+
+### 4. artist 검색
+
+```
+GET /dev/musicbrainz/artist/search?query=Beatles&limit=2
+```
+
+- HTTP 200, 1.84s
+- 응답:
+  ```json
+  [
+    {"id":"b10bbbfc-...","name":"The Beatles","sortName":"Beatles, The","country":"GB","type":"Group"},
+    {"id":"4d5447d7-...","name":"John Lennon","sortName":"Lennon, John","country":"GB","type":"Person"}
+  ]
+  ```
+- 판정: 정상 — 모든 도메인 필드 매핑
+
+### 5. artist MBID lookup
+
+```
+GET /dev/musicbrainz/artist/b10bbbfc-cf9e-42e0-be17-e2c3e1d2600d
+```
+
+- HTTP 200, 1.33s
+- 응답: `{"id":"b10bbbfc-...","name":"The Beatles","sortName":"Beatles, The","country":"GB","type":"Group"}`
+- 판정: 정상
+
+### 6. Rate limit throttle (1 req/sec)
 
 ```bash
-# 1) PostgreSQL 기동 (예시)
-docker run -d --name bandage-pg \
-  -e POSTGRES_USER=bandage -e POSTGRES_PASSWORD=bandage \
-  -e POSTGRES_DB=music_metadata -p 5432:5432 postgres:16
-
-# 2) .env 작성 (gitignore 됨)
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=music_metadata
-DB_USERNAME=bandage
-DB_PASSWORD=bandage
-EXTERNAL_MUSIC_PROVIDER=musicbrainz
-MUSICBRAINZ_USER_AGENT=BandageMusicMetadata/0.1.0
-MUSICBRAINZ_CONTACT=contact@bandage.com
-
-# 3) 부팅
-PROFILE_ACTIVE=local ./gradlew bootRun
+for i in 1..5; do time curl -s -o /dev/null .../dev/musicbrainz/artist/b10bbbfc-... ; done
 ```
 
-### 테스트 케이스
+| 회차 | 응답 시간 |
+|---|---|
+| 1 | 1.24s |
+| 2 | 1.32s |
+| 3 | 1.28s |
+| 4 | 1.22s |
+| 5 | 1.53s |
 
-#### 1. recording 검색 (성공)
+- 판정: 정상 — 모든 호출이 1초 이상 (네트워크 RTT + 강제 throttle delay). MusicBrainz 정책 1 req/sec 준수.
 
-```bash
-curl -G "http://localhost:18081/dev/musicbrainz/recording/search" \
-  --data-urlencode "query=Doxy AND artist:Miles Davis" \
-  --data-urlencode "limit=3"
+### 7. User-Agent 헤더
+
+- 직접 헤더 캡처는 외부 호출이라 어려움
+- 간접 검증: MusicBrainz 는 식별 가능한 User-Agent 누락 시 403/blocked 처리하나, 본 검증의 모든 호출이 200 응답 → User-Agent 부착 확인
+- 코드: `MusicBrainzHttpClientConfig.kt:38` `install(DefaultRequest) { header(HttpHeaders.UserAgent, "${userAgent} ( ${contact} )") }`
+- 판정: 정상
+
+### 8. Spotify 어댑터 비활성화
+
+```
+GET /dev/spotify/token
+GET /dev/spotify/search?q=test&type=track
 ```
 
-기대: 200 + `[{ id: "...mbid...", title: "Doxy", lengthMs: ..., artists: [...], isrcs: [...] }, ...]`
+- 둘 다 HTTP 404 (`{"success":false,"message":"요청한 리소스를 찾을 수 없습니다.","code":"RESOURCE_NOT_FOUND"}`)
+- 컨트롤러 빈이 `@ConditionalOnProperty(external.music.provider=spotify, matchIfMissing=false)` 로 미등록 → 라우팅 없음
+- 판정: 정상 — Spotify 어댑터 운영 경로 분리 확인
 
-#### 2. recording MBID lookup (성공)
+## 발견된 이슈
 
-```bash
-# Miles Davis 의 So What 녹음 (1959 Kind of Blue)
-curl "http://localhost:18081/dev/musicbrainz/recording/2db4eb7c-cb18-4abc-92f8-f3b18e8d6738"
-```
+| ID | 우선순위 | 내용 | 위치 | 권장 조치 |
+|---|---|---|---|---|
+| 1 | P2 (품질) | invalid MBID 등 사용자 입력 오류로 인한 외부 4xx 응답이 500 으로 매핑됨 | `MusicBrainzApiClient.ensureSuccess` + `GlobalExceptionHandler` | 후속 작업: `MusicBrainzApiException` 의 statusCode 를 그대로 (또는 400 으로) 매핑하는 핸들러 추가. 이번 PR 스코프 외 — 별도 이슈로 분리 권장. |
 
-기대: 200 + 도메인 객체 단일
+## 권장 조치 / 후속 작업
 
-#### 3. recording lookup 404 → null
-
-```bash
-curl -i "http://localhost:18081/dev/musicbrainz/recording/00000000-0000-0000-0000-000000000000"
-```
-
-기대: 200 (Spring 이 null 직렬화) — 어댑터에서 404 → null 반환
-
-#### 4. artist 검색 (성공)
-
-```bash
-curl -G "http://localhost:18081/dev/musicbrainz/artist/search" \
-  --data-urlencode "query=Beatles" \
-  --data-urlencode "limit=3"
-```
-
-기대: 200 + Artist 도메인 리스트
-
-#### 5. artist MBID lookup
-
-```bash
-# The Beatles
-curl "http://localhost:18081/dev/musicbrainz/artist/b10bbbfc-cf9e-42e0-be17-e2c3e1d2600d"
-```
-
-기대: 200 + `{ id, name: "The Beatles", sortName: "Beatles, The", country: "GB", type: "Group" }`
-
-#### 6. Rate limit throttle (어댑터 내부)
-
-연속 5회 호출 → 첫 호출 외 4회는 ~1초씩 지연되어야 함:
-
-```bash
-for i in 1 2 3 4 5; do
-  /usr/bin/time -p curl -s -o /dev/null \
-    "http://localhost:18081/dev/musicbrainz/artist/b10bbbfc-cf9e-42e0-be17-e2c3e1d2600d" 2>&1 | grep real
-done
-```
-
-기대: 첫 호출만 <1s, 나머지는 약 1.0s.
-
-#### 7. User-Agent 헤더 부착
-
-서버 access log 또는 MusicBrainz 측 로그에서 `User-Agent: BandageMusicMetadata/0.1.0 ( contact@bandage.com )` 확인.
-또는 로컬 mock proxy 로 헤더 확인.
-
-#### 8. Spotify 어댑터 비활성 확인
-
-```bash
-curl -i "http://localhost:18081/dev/spotify/token"
-```
-
-기대: 404 (컨트롤러 빈 미등록 — `external.music.provider=musicbrainz` 기본값)
-
-`external.music.provider=spotify` 로 재기동 시 200 (재활성화 검증).
-
-## 권장 조치 (실서버 검증 후 수행)
-
-- 실패 케이스 발견 시 P0/P1/P2 분류 및 수정 PR
-- 정상 동작 시 본 리포트의 status 를 "완료" 로 갱신하고 PR 본문에 링크
+- **P2-1**: MusicBrainzApiException → 4xx 응답 매핑 추가 (별도 이슈)
+- 운영 시 MusicBrainz 부하 폭주 대비 결과 캐시 (Redis) 도입 — PRD `Future Enhancements` 항목
 
 ## 프론트 관련 구현 지점
 
-(해당 없음 — 백엔드 단독 작업, FE 호출 지점 변경 없음)
+해당 없음 (백엔드 단독 작업, FE 호출 지점 변경 없음).
 
 ## 재현용 페이로드 위치
 
