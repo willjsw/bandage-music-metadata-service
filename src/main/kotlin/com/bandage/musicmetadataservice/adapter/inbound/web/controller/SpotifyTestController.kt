@@ -6,6 +6,7 @@ import com.bandage.musicmetadataservice.adapter.outbound.external.spotify.dto.re
 import com.bandage.musicmetadataservice.adapter.outbound.external.spotify.dto.request.SpotifySearchType
 import com.bandage.musicmetadataservice.adapter.outbound.external.spotify.dto.response.SpotifyTokenResponse
 import com.bandage.musicmetadataservice.adapter.outbound.external.spotify.dto.response.search.SpotifySearchResponse
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Profile
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping
@@ -79,6 +80,11 @@ import org.springframework.web.bind.annotation.RestController
 @RestController
 @RequestMapping("/dev/spotify")
 @Profile("local")
+@ConditionalOnProperty(
+    name = ["external.music.provider"],
+    havingValue = "spotify",
+    matchIfMissing = false,
+)
 class SpotifyTestController(
     private val spotifyApiClient: SpotifyApiClient,
 ) {

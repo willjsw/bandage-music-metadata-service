@@ -21,6 +21,7 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.runBlocking
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
 import java.time.Instant
 import java.util.Base64
@@ -35,6 +36,11 @@ import java.util.concurrent.atomic.AtomicReference
  * 토큰 캐시는 만료 60초 전부터 무효화되어 자동 재발급된다.
  */
 @Component
+@ConditionalOnProperty(
+    name = ["external.music.provider"],
+    havingValue = "spotify",
+    matchIfMissing = false,
+)
 class SpotifyApiClient(
     private val spotifyHttpClient: HttpClient,
     private val properties: SpotifyApiProperties,

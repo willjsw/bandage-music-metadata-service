@@ -7,4 +7,8 @@ spring:
       dev: [dev, dev-datasource, swagger, redis, security, spotify, musicbrainz]
     active: ${PROFILE_ACTIVE:local}
 
+external:
+  music:
+    provider: ${EXTERNAL_MUSIC_PROVIDER:musicbrainz}
+
 
