@@ -4,6 +4,8 @@ import com.bandage.musicmetadataservice.adapter.outbound.external.spotify.dto.re
 import com.bandage.musicmetadataservice.adapter.outbound.external.spotify.dto.response.SpotifyTokenResponse
 import com.bandage.musicmetadataservice.adapter.outbound.external.spotify.dto.response.search.SpotifySearchResponse
 import com.bandage.musicmetadataservice.application.port.outbound.MusicInfoApiClient
+import com.bandage.musicmetadataservice.domain.model.Artist
+import com.bandage.musicmetadataservice.domain.model.Recording
 import com.bandage.musicmetadataservice.global.properties.SpotifyApiProperties
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -39,10 +41,24 @@ class SpotifyApiClient(
 ) : MusicInfoApiClient {
     private val tokenCache = AtomicReference<CachedToken?>(null)
 
+    @Deprecated("Use searchRecording / searchArtist instead")
     override fun getToken(): String = runBlocking { ensureAccessToken() }
 
+    @Deprecated("Use searchRecording / searchArtist instead")
     override fun getMusicInfo(): String =
         throw UnsupportedOperationException("Use search(SpotifySearchRequest) instead")
+
+    override fun searchRecording(query: String, limit: Int, offset: Int): List<Recording> =
+        throw UnsupportedOperationException("Spotify adapter does not implement searchRecording — use MusicBrainz adapter")
+
+    override fun lookupRecording(id: String): Recording? =
+        throw UnsupportedOperationException("Spotify adapter does not implement lookupRecording — use MusicBrainz adapter")
+
+    override fun searchArtist(query: String, limit: Int, offset: Int): List<Artist> =
+        throw UnsupportedOperationException("Spotify adapter does not implement searchArtist — use MusicBrainz adapter")
+
+    override fun lookupArtist(id: String): Artist? =
+        throw UnsupportedOperationException("Spotify adapter does not implement lookupArtist — use MusicBrainz adapter")
 
     /**
      * Client Credentials Flow 로 access token 을 새로 발급한다 (캐시 우회).
