@@ -6,6 +6,10 @@ import com.bandage.musicmetadataservice.adapter.outbound.external.spotify.dto.re
 import com.bandage.musicmetadataservice.application.port.outbound.MusicInfoApiClient
 import com.bandage.musicmetadataservice.domain.model.Artist
 import com.bandage.musicmetadataservice.domain.model.Recording
+import com.bandage.musicmetadataservice.domain.model.ReleaseGroup
+import com.bandage.musicmetadataservice.domain.model.SearchMode
+import com.bandage.musicmetadataservice.domain.model.SearchSort
+import com.bandage.musicmetadataservice.domain.model.UnifiedSearchHit
 import com.bandage.musicmetadataservice.global.properties.SpotifyApiProperties
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -54,17 +58,23 @@ class SpotifyApiClient(
     override fun getMusicInfo(): String =
         throw UnsupportedOperationException("Use search(SpotifySearchRequest) instead")
 
-    override fun searchRecording(query: String, limit: Int, offset: Int): List<Recording> =
+    override fun searchRecording(query: String, limit: Int, offset: Int, mode: SearchMode): List<Recording> =
         throw UnsupportedOperationException("Spotify adapter does not implement searchRecording — use MusicBrainz adapter")
 
     override fun lookupRecording(id: String): Recording? =
         throw UnsupportedOperationException("Spotify adapter does not implement lookupRecording — use MusicBrainz adapter")
 
-    override fun searchArtist(query: String, limit: Int, offset: Int): List<Artist> =
+    override fun searchArtist(query: String, limit: Int, offset: Int, mode: SearchMode): List<Artist> =
         throw UnsupportedOperationException("Spotify adapter does not implement searchArtist — use MusicBrainz adapter")
 
     override fun lookupArtist(id: String): Artist? =
         throw UnsupportedOperationException("Spotify adapter does not implement lookupArtist — use MusicBrainz adapter")
+
+    override fun searchReleaseGroup(query: String, limit: Int, offset: Int, mode: SearchMode): List<ReleaseGroup> =
+        throw UnsupportedOperationException("Spotify adapter does not implement searchReleaseGroup — use MusicBrainz adapter")
+
+    override fun searchAll(query: String, limit: Int, mode: SearchMode, sort: SearchSort): List<UnifiedSearchHit> =
+        throw UnsupportedOperationException("Spotify adapter does not implement searchAll — use MusicBrainz adapter")
 
     /**
      * Client Credentials Flow 로 access token 을 새로 발급한다 (캐시 우회).

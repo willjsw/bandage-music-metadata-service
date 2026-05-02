@@ -4,9 +4,15 @@ import com.bandage.musicmetadataservice.adapter.outbound.external.musicbrainz.dt
 import com.bandage.musicmetadataservice.adapter.outbound.external.musicbrainz.dto.MusicBrainzArtistSearchResponse
 import com.bandage.musicmetadataservice.adapter.outbound.external.musicbrainz.dto.MusicBrainzRecordingDto
 import com.bandage.musicmetadataservice.adapter.outbound.external.musicbrainz.dto.MusicBrainzRecordingSearchResponse
+import com.bandage.musicmetadataservice.adapter.outbound.external.musicbrainz.dto.MusicBrainzReleaseGroupSearchResponse
 import com.bandage.musicmetadataservice.application.port.outbound.MusicInfoApiClient
 import com.bandage.musicmetadataservice.domain.model.Artist
 import com.bandage.musicmetadataservice.domain.model.Recording
+import com.bandage.musicmetadataservice.domain.model.ReleaseGroup
+import com.bandage.musicmetadataservice.domain.model.SearchEntityType
+import com.bandage.musicmetadataservice.domain.model.SearchMode
+import com.bandage.musicmetadataservice.domain.model.SearchSort
+import com.bandage.musicmetadataservice.domain.model.UnifiedSearchHit
 import com.bandage.musicmetadataservice.global.properties.MusicBrainzApiProperties
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -32,7 +38,7 @@ import java.time.Instant
  * - Rate limit: 익명 요청은 1 req/sec — 인스턴스 내 throttle 로 강제
  * - 404 응답은 lookup 시 null 반환, 그 외 비-2xx 는 [MusicBrainzApiException] throw
  *
- * 주의: 다중 인스턴스 / 멀티 프로세스 환경에서는 본 throttle 이 전역 보장을 못한다.
+ * 다중 인스턴스 / 멀티 프로세스 환경에서는 본 throttle 이 전역 보장을 못한다.
  * 추후 Redis 기반 token bucket 등으로 확장 가능.
  */
 @Component
@@ -47,10 +53,10 @@ class MusicBrainzApiClient(
     @Volatile
     private var lastCallTime: Instant = Instant.EPOCH
 
-    override fun searchRecording(query: String, limit: Int, offset: Int): List<Recording> =
+    override fun searchRecording(query: String, limit: Int, offset: Int, mode: SearchMode): List<Recording> =
         runBlocking {
             val response = throttledGet("/ws/2/recording/") {
-                parameter("query", query)
+                parameter("query", query.transformQuery(mode))
                 parameter("limit", limit)
                 parameter("offset", offset)
                 parameter("fmt", "json")
@@ -72,10 +78,10 @@ class MusicBrainzApiClient(
             dto.toDomain()
         }
 
-    override fun searchArtist(query: String, limit: Int, offset: Int): List<Artist> =
+    override fun searchArtist(query: String, limit: Int, offset: Int, mode: SearchMode): List<Artist> =
         runBlocking {
             val response = throttledGet("/ws/2/artist/") {
-                parameter("query", query)
+                parameter("query", query.transformQuery(mode))
                 parameter("limit", limit)
                 parameter("offset", offset)
                 parameter("fmt", "json")
@@ -95,6 +101,43 @@ class MusicBrainzApiClient(
             val dto: MusicBrainzArtistDto = response.body()
             dto.toDomain()
         }
+
+    override fun searchReleaseGroup(query: String, limit: Int, offset: Int, mode: SearchMode): List<ReleaseGroup> =
+        runBlocking {
+            val response = throttledGet("/ws/2/release-group/") {
+                parameter("query", query.transformQuery(mode))
+                parameter("limit", limit)
+                parameter("offset", offset)
+                parameter("fmt", "json")
+            }
+            ensureSuccess(response)
+            val dto: MusicBrainzReleaseGroupSearchResponse = response.body()
+            dto.releaseGroups.map { it.toDomain() }
+        }
+
+    override fun searchAll(
+        query: String,
+        limit: Int,
+        mode: SearchMode,
+        sort: SearchSort,
+    ): List<UnifiedSearchHit> {
+        // 직렬 호출. throttle 이 호출 간 1초 간격 강제 → 약 3초 소요
+        val recordings = searchRecording(query, limit, mode = mode).map { it.toUnifiedHit() }
+        val artists = searchArtist(query, limit, mode = mode).map { it.toUnifiedHit() }
+        val releaseGroups = searchReleaseGroup(query, limit, mode = mode).map { it.toUnifiedHit() }
+
+        val merged = recordings + artists + releaseGroups
+        return when (sort) {
+            SearchSort.SCORE -> merged.sortedWith(
+                compareByDescending<UnifiedSearchHit> { it.score ?: 0 }
+                    .thenByDescending { it.releaseCount },
+            )
+            SearchSort.RELEASE_COUNT -> merged.sortedWith(
+                compareByDescending<UnifiedSearchHit> { it.releaseCount }
+                    .thenByDescending { it.score ?: 0 },
+            )
+        }
+    }
 
     private suspend fun throttledGet(
         path: String,
@@ -126,5 +169,78 @@ class MusicBrainzApiClient(
             rawBody = response.bodyAsText(),
             retryAfterSeconds = retryAfter,
         )
+    }
+
+    /**
+     * [SearchMode.LOOSE] 시 토큰 단위 fuzzy(`~1`) 부착.
+     *
+     * - 공백 단위로 토큰화, 각 토큰에 Lucene reserved char escape 후 `~1` 부착
+     * - 1자 토큰은 Lucene 이 fuzzy 적용을 거절할 수 있으므로 wildcard `*` 부착으로 대체
+     * - field-prefixed 토큰(`artist:Beatles`) 은 prefix 보존 후 value 에만 fuzzy 부착
+     */
+    private fun String.transformQuery(mode: SearchMode): String =
+        when (mode) {
+            SearchMode.EXACT -> this
+            SearchMode.LOOSE -> looseTokens(this)
+        }
+
+    private fun looseTokens(raw: String): String {
+        val tokens = raw.trim().split(WHITESPACE).filter { it.isNotBlank() }
+        if (tokens.isEmpty()) return raw
+        return tokens.joinToString(" ") { token -> applyFuzzy(token) }
+    }
+
+    private fun applyFuzzy(token: String): String {
+        val (prefix, value) = splitFieldPrefix(token)
+        val escaped = escapeLucene(value)
+        val transformed =
+            if (escaped.length <= 1) "$escaped*" else "$escaped~1"
+        return "$prefix$transformed"
+    }
+
+    private fun splitFieldPrefix(token: String): Pair<String, String> {
+        val colon = token.indexOf(':')
+        if (colon <= 0 || colon == token.length - 1) return "" to token
+        return token.substring(0, colon + 1) to token.substring(colon + 1)
+    }
+
+    private fun escapeLucene(value: String): String =
+        value.replace(Regex("([+\\-!(){}\\[\\]^\"~*?:\\\\/])"), "\\\\$1")
+
+    private fun Recording.toUnifiedHit(): UnifiedSearchHit =
+        UnifiedSearchHit(
+            type = SearchEntityType.RECORDING,
+            id = id,
+            title = title,
+            subtitle = artists.firstOrNull()?.name,
+            score = score,
+            releaseCount = releaseCount,
+            payload = this,
+        )
+
+    private fun Artist.toUnifiedHit(): UnifiedSearchHit =
+        UnifiedSearchHit(
+            type = SearchEntityType.ARTIST,
+            id = id,
+            title = name,
+            subtitle = sortName ?: type,
+            score = score,
+            releaseCount = 0,
+            payload = this,
+        )
+
+    private fun ReleaseGroup.toUnifiedHit(): UnifiedSearchHit =
+        UnifiedSearchHit(
+            type = SearchEntityType.RELEASE_GROUP,
+            id = id,
+            title = title,
+            subtitle = artistCredit.firstOrNull()?.name,
+            score = score,
+            releaseCount = releaseCount,
+            payload = this,
+        )
+
+    companion object {
+        private val WHITESPACE = Regex("\\s+")
     }
 }

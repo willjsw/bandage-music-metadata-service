@@ -2,6 +2,10 @@ package com.bandage.musicmetadataservice.application.port.outbound
 
 import com.bandage.musicmetadataservice.domain.model.Artist
 import com.bandage.musicmetadataservice.domain.model.Recording
+import com.bandage.musicmetadataservice.domain.model.ReleaseGroup
+import com.bandage.musicmetadataservice.domain.model.SearchMode
+import com.bandage.musicmetadataservice.domain.model.SearchSort
+import com.bandage.musicmetadataservice.domain.model.UnifiedSearchHit
 
 /**
  * 외부 음악 메타데이터 API 호출 포트 (driven port).
@@ -16,23 +20,51 @@ interface MusicInfoApiClient {
 
     // ===== Recording =====
 
-    /**
-     * 검색 쿼리로 recording(track) 목록 조회.
-     *
-     * @param query 소스별 query syntax 그대로 (MusicBrainz: Lucene, Spotify: q 파라미터)
-     */
-    fun searchRecording(query: String, limit: Int = 25, offset: Int = 0): List<Recording>
+    fun searchRecording(
+        query: String,
+        limit: Int = 25,
+        offset: Int = 0,
+        mode: SearchMode = SearchMode.EXACT,
+    ): List<Recording>
 
-    /**
-     * 식별자(MBID 또는 외부 소스 id) 로 단일 recording 조회. 없으면 null.
-     */
     fun lookupRecording(id: String): Recording?
 
     // ===== Artist =====
 
-    fun searchArtist(query: String, limit: Int = 25, offset: Int = 0): List<Artist>
+    fun searchArtist(
+        query: String,
+        limit: Int = 25,
+        offset: Int = 0,
+        mode: SearchMode = SearchMode.EXACT,
+    ): List<Artist>
 
     fun lookupArtist(id: String): Artist?
+
+    // ===== Release Group =====
+
+    fun searchReleaseGroup(
+        query: String,
+        limit: Int = 25,
+        offset: Int = 0,
+        mode: SearchMode = SearchMode.EXACT,
+    ): List<ReleaseGroup>
+
+    // ===== 통합 검색 =====
+
+    /**
+     * 같은 query 로 recording / artist / release-group 을 동시에 조회한 뒤
+     * 단일 정렬된 hit 리스트로 반환한다.
+     *
+     * 가중치는 적용하지 않는다 — entity 간 score 를 동일 스케일로 사용한다.
+     *
+     * @param limit entity **당** 호출 limit (총 결과는 최대 3 * limit)
+     */
+    fun searchAll(
+        query: String,
+        limit: Int = 10,
+        mode: SearchMode = SearchMode.EXACT,
+        sort: SearchSort = SearchSort.SCORE,
+    ): List<UnifiedSearchHit>
 
     // ===== Legacy (보존용, 신규 사용 금지) =====
 
