@@ -1,4 +1,4 @@
-package com.bandage.musicmetadataservice.global.config
+package com.bandage.musicmetadataservice.global.properties
 
 import org.springframework.boot.context.properties.ConfigurationProperties
 

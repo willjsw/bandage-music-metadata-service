@@ -1,5 +1,6 @@
-package com.bandage.musicmetadataservice.global.config
+package com.bandage.musicmetadataservice.global.config.spotify
 
+import com.bandage.musicmetadataservice.global.properties.SpotifyApiProperties
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import io.ktor.client.HttpClient

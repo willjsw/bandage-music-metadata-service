@@ -4,7 +4,7 @@ import com.bandage.musicmetadataservice.adapter.outbound.external.spotify.dto.re
 import com.bandage.musicmetadataservice.adapter.outbound.external.spotify.dto.response.SpotifyTokenResponse
 import com.bandage.musicmetadataservice.adapter.outbound.external.spotify.dto.response.search.SpotifySearchResponse
 import com.bandage.musicmetadataservice.application.port.outbound.MusicInfoApiClient
-import com.bandage.musicmetadataservice.global.config.SpotifyApiProperties
+import com.bandage.musicmetadataservice.global.properties.SpotifyApiProperties
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get

@@ -1,4 +1,4 @@
-package com.bandage.musicmetadataservice.adapter.inbound.web
+package com.bandage.musicmetadataservice.adapter.inbound.web.controller
 
 import com.bandage.musicmetadataservice.adapter.outbound.external.spotify.SpotifyApiClient
 import com.bandage.musicmetadataservice.adapter.outbound.external.spotify.dto.request.IncludeExternal
@@ -110,4 +110,5 @@ class SpotifyTestController(
             )
         return spotifyApiClient.search(request)
     }
+
 }
