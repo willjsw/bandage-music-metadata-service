@@ -4,6 +4,9 @@ import com.bandage.musicmetadataservice.global.common.response.ApiResponse
 import com.bandage.musicmetadataservice.global.error.errorcode.ErrorCode
 import com.bandage.musicmetadataservice.global.error.exception.BusinessException
 import com.bandage.musicmetadataservice.global.error.exception.Exception
+import com.bandage.musicmetadataservice.global.error.exception.MusicBrainzApiException
+import org.slf4j.LoggerFactory
+import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.http.converter.HttpMessageNotReadableException
@@ -15,12 +18,28 @@ import org.springframework.web.servlet.resource.NoResourceFoundException
 
 @RestControllerAdvice
 open class GlobalExceptionHandler {
+    private val log = LoggerFactory.getLogger(GlobalExceptionHandler::class.java)
+
     @ExceptionHandler
     protected fun handleBusinessException(e: BusinessException): ResponseEntity<ApiResponse<Nothing>> {
         val errorCode = e.errorCode
         return ResponseEntity
             .status(errorCode.status)
             .body(ApiResponse.error(message = errorCode.message, code = errorCode.name))
+    }
+
+    @ExceptionHandler(MusicBrainzApiException::class)
+    protected fun handleMusicBrainzApiException(e: MusicBrainzApiException): ResponseEntity<ApiResponse<Nothing>> {
+        val errorCode = e.errorCode
+        log.warn(
+            "MusicBrainz API error: status={}, retryAfter={}, body={}",
+            e.statusCode,
+            e.retryAfterSeconds,
+            e.rawBody,
+        )
+        val builder = ResponseEntity.status(errorCode.status)
+        e.retryAfterSeconds?.let { builder.header(HttpHeaders.RETRY_AFTER, it.toString()) }
+        return builder.body(ApiResponse.error(message = errorCode.message, code = errorCode.name))
     }
 
     @ExceptionHandler(MethodArgumentNotValidException::class)

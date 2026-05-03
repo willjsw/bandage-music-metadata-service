@@ -1,0 +1,152 @@
+<context>
+# Overview
+music-metadata-service 의 외부 음악 메타데이터 소스를 **Spotify Web API → MusicBrainz API** 로 전환한다.
+현재는 헥사고날 아키텍처의 outbound port `MusicInfoApiClient` 의 유일한 구현체로 `SpotifyApiClient` 가 존재한다.
+본 작업에서는 동일한 port 인터페이스를 재사용해 `MusicBrainzApiClient` 어댑터를 추가하고, 기본 활성 어댑터를 MusicBrainz 로 전환한다.
+Spotify 관련 소스(어댑터, DTO, properties, test controller, http client config)는 **삭제하지 않고** 유지하되,
+기본 빈 등록을 비활성화해 운영 경로에서 분리한다.
+
+해결하려는 문제:
+- Spotify Client Credentials 토큰 발급/만료 관리, market 제약, 일부 메타데이터 부재 등으로 인한 운영 부담
+- MusicBrainz 는 인증 불필요(공개 API)이며 ISRC/MBID/release/recording/work 등 풍부한 메타데이터 제공
+- 향후 다른 소스(Discogs 등) 추가를 고려해 port-adapter 경계를 명확히 유지
+
+대상 사용자:
+- 본 서비스에 음악 메타데이터를 의존하는 내부 서비스(밴드ge 백엔드 등)
+- 로컬에서 메타데이터 소스 동작을 검증하는 개발자
+
+# Core Features
+1. **MusicBrainz 검색 어댑터**
+   - `MusicInfoApiClient` 를 구현하는 `MusicBrainzApiClient` 추가
+   - artist / release / release-group / recording / work 검색 지원 (1차: recording + artist + release)
+   - User-Agent 필수 헤더(이름/버전/연락처) 적용 — MusicBrainz 정책
+   - Rate limit 1 req/sec 준수 (간단한 throttle)
+
+2. **MBID 기반 lookup**
+   - `/ws/2/{entity}/{mbid}?inc=...&fmt=json` 호출
+   - recording, release, artist 단일 조회 지원
+
+3. **포트 인터페이스 재정비**
+   - 현재 `MusicInfoApiClient.getMusicInfo(): String` 시그니처는 placeholder.
+   - MusicBrainz/Spotify 양쪽이 의미있게 만족할 수 있는 도메인 중심 메서드로 확장.
+   - 1차 범위: `searchRecording(query, limit, offset)`, `lookupRecording(mbid)`, `searchArtist(query, ...)`, `lookupArtist(mbid)`.
+   - 반환 타입은 도메인 모델(`domain/model`) 로 정의해 외부 DTO 누출 방지.
+
+4. **기본 어댑터를 MusicBrainz 로 전환**
+   - Spring `@Primary` / 프로파일 / `@ConditionalOnProperty` 중 하나로 기본 활성 어댑터 = MusicBrainz
+   - Spotify 관련 빈은 기본 비활성화 (소스/설정은 유지하되 컴포넌트 스캔에서 등록되지 않게)
+
+5. **로컬 테스트 컨트롤러 교체**
+   - 기존 `SpotifyTestController` 와 동일 컨셉의 `MusicBrainzTestController` 추가 (`local` 프로필 한정)
+   - `/dev/musicbrainz/recording/search`, `/dev/musicbrainz/recording/{mbid}`, `/dev/musicbrainz/artist/search`, `/dev/musicbrainz/artist/{mbid}`
+   - Spotify Test Controller 는 비활성화(@Profile 변경 또는 주석 처리)
+
+6. **에러/예외 모델**
+   - `MusicBrainzApiException` 추가 — 상태코드, raw body, retryAfter
+   - 503 / 429 (rate limit) 시 retry-after 헤더 반영
+
+7. **설정/문서**
+   - `MusicBrainzApiProperties` (baseUrl, userAgent, contact)
+   - `application.yaml` / `application-local.yaml` 에 baseUrl, userAgent 항목 추가
+   - `.env.example` 에 필요한 항목 명시 (현재로선 없음 — 인증 불필요)
+   - README 또는 CLAUDE.md 의 외부 호출 섹션 갱신은 후속 작업
+
+# User Experience
+- 개발자 흐름:
+  1. `./gradlew bootRun` (local profile, port 18081)
+  2. `curl "http://localhost:18081/dev/musicbrainz/recording/search?query=Doxy%20AND%20artist:Miles%20Davis&limit=5"` 로 raw 응답 확인
+  3. `curl "http://localhost:18081/dev/musicbrainz/recording/{mbid}"` 로 MBID lookup 확인
+- 내부 서비스 호출 흐름:
+  1. inbound 컨트롤러 → application service → `MusicInfoApiClient`(port) → `MusicBrainzApiClient`(adapter) → MusicBrainz `/ws/2/...`
+  2. Spotify 어댑터는 코드에는 남아있지만 빈 등록 안 됨 → 호출되지 않음
+- UI 는 없음 (백엔드 서비스).
+
+</context>
+<PRD>
+# Technical Architecture
+
+## System Components
+- **Inbound (driving)**: 기존 controller 구조 유지. 단, `SpotifyTestController` 는 비활성화하고 `MusicBrainzTestController` 신설(local 프로필).
+- **Application port (outbound)**: `MusicInfoApiClient` 인터페이스를 도메인 메서드로 확장.
+- **Application service**: 1차 작업에서는 use case 신설을 미루고 port 직접 호출(test controller) 만 추가. 도메인 use case 정의는 후속 작업으로 분리 가능.
+- **Adapter (outbound)**:
+  - 신규: `adapter/outbound/external/musicbrainz/MusicBrainzApiClient.kt` — Ktor CIO 기반
+  - 신규: `adapter/outbound/external/musicbrainz/dto/...` — request / response DTO
+  - 신규: `adapter/outbound/external/musicbrainz/MusicBrainzApiException.kt`
+  - 유지: `adapter/outbound/external/spotify/...` (수정 최소화, `@Component` 만 제거하거나 `@ConditionalOnProperty` 처리)
+- **Config**:
+  - 신규: `global/config/musicbrainz/MusicBrainzHttpClientConfig.kt` — Ktor HttpClient bean (User-Agent default header 포함)
+  - 유지: `global/config/spotify/SpotifyHttpClientConfig.kt` (조건부 비활성화)
+- **Properties**:
+  - 신규: `global/properties/MusicBrainzApiProperties.kt`
+  - 유지: `global/properties/SpotifyApiProperties.kt`
+- **Domain model** (1차 최소):
+  - `domain/model/Recording`, `Artist`, `Release` — MusicBrainz / Spotify 공통으로 매핑 가능한 최소 필드
+  - 어댑터에서 도메인 모델로 매핑
+
+## Data Models (도메인 측 최소 필드 — 1차)
+- `Recording(id: String, title: String, lengthMs: Long?, artists: List<ArtistRef>, isrcs: List<String>)`
+- `ArtistRef(id: String, name: String)`
+- `Artist(id: String, name: String, sortName: String?, country: String?, type: String?)`
+- `Release(id: String, title: String, date: String?, country: String?, artistCredit: List<ArtistRef>)`
+
+## APIs and Integrations
+- MusicBrainz Web Service v2 — `https://musicbrainz.org/ws/2`
+  - `GET /ws/2/recording/?query=...&fmt=json&limit=...&offset=...`
+  - `GET /ws/2/recording/{mbid}?inc=artists+isrcs+releases&fmt=json`
+  - `GET /ws/2/artist/?query=...&fmt=json`
+  - `GET /ws/2/artist/{mbid}?inc=...&fmt=json`
+- 인증: 없음. 단, `User-Agent: BandageMusicMetadata/0.1.0 ( contact@example.com )` 필수.
+- Rate limit: 익명 1 req/sec 권장 — client 내부에 mutex + last-call timestamp 기반 throttle.
+
+## Infrastructure Requirements
+- 별도 인프라 변경 없음. 외부 호출 도메인만 spotify → musicbrainz 로 변경.
+- 환경변수 신규: `MUSICBRAINZ_BASE_URL`(기본값 https://musicbrainz.org), `MUSICBRAINZ_USER_AGENT`, `MUSICBRAINZ_CONTACT`.
+
+# Development Roadmap
+
+## MVP (이번 작업 범위)
+1. `MusicBrainzApiProperties` + `application*.yaml` 설정 추가
+2. `MusicBrainzHttpClientConfig` (Ktor CIO + Jackson + User-Agent default header)
+3. `MusicBrainzApiException`
+4. MusicBrainz 응답/요청 DTO (recording search/lookup, artist search/lookup)
+5. 도메인 모델 (`Recording`, `Artist`, `Release`, `ArtistRef`)
+6. `MusicInfoApiClient` 포트 시그니처 확장 (도메인 모델 반환)
+7. `MusicBrainzApiClient` 어댑터 구현 + rate limit throttle
+8. Spotify 어댑터 비활성화 (조건부 `@ConditionalOnProperty(name="external.music.provider", havingValue="spotify")` 또는 `@Component` 제거)
+9. MusicBrainz 어댑터를 기본 활성 (`@Primary` 또는 동일 conditional 의 `havingValue="musicbrainz"`, default = musicbrainz)
+10. `MusicBrainzTestController` 신설 (local), `SpotifyTestController` 비활성화
+11. `./gradlew spotlessApply build` 통과 확인
+12. 로컬 실서버 검증 (CLAUDE.md §9) — curl 전수 호출 및 `.taskmaster/report/musicbrainz-api-verification-YYYY-MM-DD.md` 작성
+
+## Future Enhancements (이번 범위 밖)
+- application/service use case 정식화 (`SearchRecordingUseCase` 등)
+- ISRC/MBID 기반 cross-source 매핑 (Spotify ↔ MusicBrainz)
+- Redis 캐시(검색결과/lookup) — 이미 `redis` 프로파일 그룹은 정의되어 있음
+- Discogs / iTunes 등 추가 어댑터
+- Spring Retry / Resilience4j 적용
+- 도메인 use case 단위 테스트, 어댑터 통합 테스트
+
+# Logical Dependency Chain
+1. Properties + HTTP client config + Exception 클래스 (기반)
+2. 응답 DTO + 도메인 모델 + 매핑 (데이터 형태 확정)
+3. 포트 인터페이스 확장 (계약 확정)
+4. `MusicBrainzApiClient` 구현 (실제 호출)
+5. Spotify 어댑터 비활성화 + MusicBrainz 기본화 (스위치 오버)
+6. 테스트 컨트롤러 교체 (local 검증 진입점 확보)
+7. 빌드/포맷 통과
+8. 실서버 curl 검증 + 리포트 작성
+
+# Risks and Mitigations
+- **Rate limit 위반(429/503)** → 클라이언트 내 throttle + retry-after 처리 + 통합 테스트에서 직접 호출 자제
+- **User-Agent 누락 시 차단** → HttpClient default header 로 강제, 누락 시 빌드/구동 실패하도록 properties validation
+- **포트 시그니처 변경 영향** → 현재 호출자가 placeholder 수준이라 영향 범위 작음. 호출자(SpotifyTestController) 는 어차피 비활성화될 예정.
+- **JPA `ddl-auto: validate`** 와 무관 (DB 변경 없음)
+
+# Out of Scope
+- 데이터베이스 스키마 변경
+- Redis 캐시 도입
+- 신규 도메인 use case 정의 및 inbound API 변경
+- Spotify 어댑터 코드 삭제 (의도적으로 보존)
+
+</PRD>

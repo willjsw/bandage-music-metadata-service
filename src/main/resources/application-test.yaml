@@ -31,6 +31,19 @@ jwt:
   refresh-token-expr: 25200
   secret: "OXCdljnxxIeLMbX/dnQIWyVSuVAdkGc6p6FYaChtCb6Zzg//p1tdUwekTL/CB7QPNf47GjGhhRvXYe2bs3UWTg=="
 
+spotify:
+  client-id: test-client-id
+  client-secret: test-client-secret
+
+musicbrainz:
+  base-url: https://musicbrainz.org
+  user-agent: BandageMusicMetadata-Test/0.1.0
+  contact: test@bandage.com
+
+external:
+  music:
+    provider: musicbrainz
+
 logging:
   level:
     org.hibernate.SQL: DEBUG

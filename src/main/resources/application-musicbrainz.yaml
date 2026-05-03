@@ -1,0 +1,4 @@
+musicbrainz:
+  base-url: ${MUSICBRAINZ_BASE_URL:https://musicbrainz.org}
+  user-agent: ${MUSICBRAINZ_USER_AGENT:BandageMusicMetadata/0.1.0}
+  contact: ${MUSICBRAINZ_CONTACT:contact@bandage.com}
