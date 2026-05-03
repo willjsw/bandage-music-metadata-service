@@ -5,11 +5,11 @@ import com.bandage.musicmetadataservice.adapter.outbound.external.musicbrainz.dt
 import com.bandage.musicmetadataservice.adapter.outbound.external.musicbrainz.dto.MusicBrainzRecordingDto
 import com.bandage.musicmetadataservice.adapter.outbound.external.musicbrainz.dto.MusicBrainzReleaseDto
 import com.bandage.musicmetadataservice.adapter.outbound.external.musicbrainz.dto.MusicBrainzReleaseGroupDto
-import com.bandage.musicmetadataservice.domain.model.Artist
-import com.bandage.musicmetadataservice.domain.model.ArtistRef
-import com.bandage.musicmetadataservice.domain.model.Recording
-import com.bandage.musicmetadataservice.domain.model.Release
-import com.bandage.musicmetadataservice.domain.model.ReleaseGroup
+import com.bandage.musicmetadataservice.domain.model.dto.Artist
+import com.bandage.musicmetadataservice.domain.model.dto.ArtistRef
+import com.bandage.musicmetadataservice.domain.model.dto.Recording
+import com.bandage.musicmetadataservice.domain.model.dto.Release
+import com.bandage.musicmetadataservice.domain.model.dto.ReleaseGroup
 
 internal fun MusicBrainzRecordingDto.toDomain(): Recording =
     Recording(

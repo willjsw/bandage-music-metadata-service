@@ -1,4 +1,4 @@
-package com.bandage.musicmetadataservice.domain.model
+package com.bandage.musicmetadataservice.domain.model.dto
 
 /**
  * 통합 검색 단일 결과. recording / artist / release-group 어느 entity 에서 왔는지를 [type] 으로 표시.

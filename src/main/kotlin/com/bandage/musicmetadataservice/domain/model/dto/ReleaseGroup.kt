@@ -1,4 +1,4 @@
-package com.bandage.musicmetadataservice.domain.model
+package com.bandage.musicmetadataservice.domain.model.dto
 
 /**
  * Release Group 도메인 모델 — 앨범/싱글/EP 등 발매 단위의 추상.

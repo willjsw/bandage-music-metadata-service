@@ -1,4 +1,4 @@
-package com.bandage.musicmetadataservice.domain.model
+package com.bandage.musicmetadataservice.domain.model.dto
 
 /**
  * 아티스트 도메인 모델 (단일 조회/검색 결과용).

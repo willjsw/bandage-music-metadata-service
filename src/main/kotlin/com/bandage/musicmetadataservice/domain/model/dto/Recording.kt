@@ -1,4 +1,4 @@
-package com.bandage.musicmetadataservice.domain.model
+package com.bandage.musicmetadataservice.domain.model.dto
 
 /**
  * 음원 녹음(track) 도메인 모델.

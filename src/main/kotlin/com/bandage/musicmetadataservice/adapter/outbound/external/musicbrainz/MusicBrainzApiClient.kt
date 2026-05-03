@@ -6,13 +6,14 @@ import com.bandage.musicmetadataservice.adapter.outbound.external.musicbrainz.dt
 import com.bandage.musicmetadataservice.adapter.outbound.external.musicbrainz.dto.MusicBrainzRecordingSearchResponse
 import com.bandage.musicmetadataservice.adapter.outbound.external.musicbrainz.dto.MusicBrainzReleaseGroupSearchResponse
 import com.bandage.musicmetadataservice.application.port.outbound.MusicInfoApiClient
-import com.bandage.musicmetadataservice.domain.model.Artist
-import com.bandage.musicmetadataservice.domain.model.Recording
-import com.bandage.musicmetadataservice.domain.model.ReleaseGroup
-import com.bandage.musicmetadataservice.domain.model.SearchEntityType
-import com.bandage.musicmetadataservice.domain.model.SearchMode
-import com.bandage.musicmetadataservice.domain.model.SearchSort
-import com.bandage.musicmetadataservice.domain.model.UnifiedSearchHit
+import com.bandage.musicmetadataservice.domain.model.dto.Artist
+import com.bandage.musicmetadataservice.domain.model.dto.Recording
+import com.bandage.musicmetadataservice.domain.model.dto.ReleaseGroup
+import com.bandage.musicmetadataservice.domain.model.dto.SearchEntityType
+import com.bandage.musicmetadataservice.domain.model.enums.SearchMode
+import com.bandage.musicmetadataservice.domain.model.enums.SearchSort
+import com.bandage.musicmetadataservice.domain.model.dto.UnifiedSearchHit
+import com.bandage.musicmetadataservice.global.error.exception.MusicBrainzApiException
 import com.bandage.musicmetadataservice.global.properties.MusicBrainzApiProperties
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -36,7 +37,7 @@ import java.time.Instant
  *
  * - 인증 불필요 (User-Agent 헤더만 필수 — HttpClient DefaultRequest 에서 부착)
  * - Rate limit: 익명 요청은 1 req/sec — 인스턴스 내 throttle 로 강제
- * - 404 응답은 lookup 시 null 반환, 그 외 비-2xx 는 [MusicBrainzApiException] throw
+ * - 404 응답은 lookup 시 null 반환, 그 외 비-2xx 는 [com.bandage.musicmetadataservice.global.error.exception.MusicBrainzApiException] throw
  *
  * 다중 인스턴스 / 멀티 프로세스 환경에서는 본 throttle 이 전역 보장을 못한다.
  * 추후 Redis 기반 token bucket 등으로 확장 가능.

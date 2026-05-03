@@ -1,4 +1,4 @@
-package com.bandage.musicmetadataservice.domain.model
+package com.bandage.musicmetadataservice.domain.model.enums
 
 /**
  * 외부 검색 호출 시 query 변환 모드.

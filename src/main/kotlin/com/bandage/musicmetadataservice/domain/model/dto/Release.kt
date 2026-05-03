@@ -1,4 +1,4 @@
-package com.bandage.musicmetadataservice.domain.model
+package com.bandage.musicmetadataservice.domain.model.dto
 
 /**
  * 발매(release) 도메인 모델 — 보통 앨범/싱글에 해당.

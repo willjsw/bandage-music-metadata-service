@@ -23,8 +23,9 @@
         "dependencies": [
           "1"
         ],
-        "status": "pending",
-        "subtasks": []
+        "status": "done",
+        "subtasks": [],
+        "updatedAt": "2026-05-02T14:37:10.876Z"
       },
       {
         "id": "3",
@@ -34,8 +35,9 @@
         "testStrategy": "1. 예외 생성 후 message, statusCode, retryAfterSeconds 필드 정상 접근 확인\n2. GlobalExceptionHandler에서 해당 예외 처리 로직 추가 여부 검토 (MVP 범위 밖이면 후속)",
         "priority": "medium",
         "dependencies": [],
-        "status": "pending",
-        "subtasks": []
+        "status": "done",
+        "subtasks": [],
+        "updatedAt": "2026-05-02T14:37:33.680Z"
       },
       {
         "id": "4",
@@ -45,8 +47,9 @@
         "testStrategy": "1. MusicBrainz API 실제 응답 JSON 샘플로 Jackson 역직렬화 테스트\n2. 필드 누락 시 null 처리 확인 (FAIL_ON_UNKNOWN_PROPERTIES=false)\n3. kebab-case 필드명 @JsonProperty 매핑 검증",
         "priority": "high",
         "dependencies": [],
-        "status": "pending",
-        "subtasks": []
+        "status": "done",
+        "subtasks": [],
+        "updatedAt": "2026-05-02T14:38:23.009Z"
       },
       {
         "id": "5",
@@ -56,8 +59,9 @@
         "testStrategy": "1. data class 기본 기능 검증 (equals, hashCode, copy)\n2. DTO → 도메인 모델 매핑 로직 작성 후 변환 정합성 확인",
         "priority": "high",
         "dependencies": [],
-        "status": "pending",
-        "subtasks": []
+        "status": "done",
+        "subtasks": [],
+        "updatedAt": "2026-05-02T14:39:02.130Z"
       },
       {
         "id": "6",
@@ -69,8 +73,9 @@
         "dependencies": [
           "5"
         ],
-        "status": "pending",
-        "subtasks": []
+        "status": "done",
+        "subtasks": [],
+        "updatedAt": "2026-05-02T14:40:13.426Z"
       },
       {
         "id": "7",
@@ -86,8 +91,9 @@
           "5",
           "6"
         ],
-        "status": "pending",
-        "subtasks": []
+        "status": "done",
+        "subtasks": [],
+        "updatedAt": "2026-05-02T14:41:23.495Z"
       },
       {
         "id": "8",
@@ -99,8 +105,9 @@
         "dependencies": [
           "7"
         ],
-        "status": "pending",
-        "subtasks": []
+        "status": "done",
+        "subtasks": [],
+        "updatedAt": "2026-05-02T14:42:38.620Z"
       },
       {
         "id": "9",
@@ -113,8 +120,9 @@
           "7",
           "8"
         ],
-        "status": "pending",
-        "subtasks": []
+        "status": "done",
+        "subtasks": [],
+        "updatedAt": "2026-05-02T14:43:16.272Z"
       },
       {
         "id": "10",
@@ -134,15 +142,16 @@
           "8",
           "9"
         ],
-        "status": "pending",
-        "subtasks": []
+        "status": "done",
+        "subtasks": [],
+        "updatedAt": "2026-05-02T14:45:28.191Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-05-02T13:17:50.085Z",
+      "lastModified": "2026-05-02T14:45:28.200Z",
       "taskCount": 10,
-      "completedCount": 1,
+      "completedCount": 10,
       "tags": [
         "master"
       ]

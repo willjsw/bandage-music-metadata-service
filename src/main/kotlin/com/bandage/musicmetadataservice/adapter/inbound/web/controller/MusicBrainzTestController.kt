@@ -1,12 +1,12 @@
 package com.bandage.musicmetadataservice.adapter.inbound.web.controller
 
 import com.bandage.musicmetadataservice.application.port.outbound.MusicInfoApiClient
-import com.bandage.musicmetadataservice.domain.model.Artist
-import com.bandage.musicmetadataservice.domain.model.Recording
-import com.bandage.musicmetadataservice.domain.model.ReleaseGroup
-import com.bandage.musicmetadataservice.domain.model.SearchMode
-import com.bandage.musicmetadataservice.domain.model.SearchSort
-import com.bandage.musicmetadataservice.domain.model.UnifiedSearchHit
+import com.bandage.musicmetadataservice.domain.model.dto.Artist
+import com.bandage.musicmetadataservice.domain.model.dto.Recording
+import com.bandage.musicmetadataservice.domain.model.dto.ReleaseGroup
+import com.bandage.musicmetadataservice.domain.model.enums.SearchMode
+import com.bandage.musicmetadataservice.domain.model.enums.SearchSort
+import com.bandage.musicmetadataservice.domain.model.dto.UnifiedSearchHit
 import org.springframework.context.annotation.Profile
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable

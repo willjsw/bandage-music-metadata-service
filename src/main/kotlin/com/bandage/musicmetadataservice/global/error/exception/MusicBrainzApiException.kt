@@ -1,4 +1,4 @@
-package com.bandage.musicmetadataservice.adapter.outbound.external.musicbrainz
+package com.bandage.musicmetadataservice.global.error.exception
 
 /**
  * MusicBrainz Web Service 호출이 2xx 가 아닐 때 던지는 어댑터 레벨 예외.
