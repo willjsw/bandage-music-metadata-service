@@ -13,6 +13,7 @@ import com.bandage.musicmetadataservice.domain.model.dto.SearchEntityType
 import com.bandage.musicmetadataservice.domain.model.enums.SearchMode
 import com.bandage.musicmetadataservice.domain.model.enums.SearchSort
 import com.bandage.musicmetadataservice.domain.model.dto.UnifiedSearchHit
+import com.bandage.musicmetadataservice.global.error.errorcode.ErrorCode
 import com.bandage.musicmetadataservice.global.error.exception.MusicBrainzApiException
 import com.bandage.musicmetadataservice.global.properties.MusicBrainzApiProperties
 import io.ktor.client.HttpClient
@@ -165,7 +166,15 @@ class MusicBrainzApiClient(
     private suspend fun ensureSuccess(response: HttpResponse) {
         if (response.status.isSuccess()) return
         val retryAfter = response.headers[HttpHeaders.RetryAfter]?.toLongOrNull()
+        val errorCode = when (response.status.value) {
+            400 -> ErrorCode.MUSICBRAINZ_INVALID_REQUEST
+            404 -> ErrorCode.MUSICBRAINZ_NOT_FOUND
+            429 -> ErrorCode.MUSICBRAINZ_RATE_LIMITED
+            503 -> ErrorCode.MUSICBRAINZ_UNAVAILABLE
+            else -> ErrorCode.MUSICBRAINZ_UPSTREAM_ERROR
+        }
         throw MusicBrainzApiException(
+            errorCode = errorCode,
             statusCode = response.status.value,
             rawBody = response.bodyAsText(),
             retryAfterSeconds = retryAfter,
